@@ -6,6 +6,18 @@
 #include "proc.h"
 #include "defs.h"
 
+#define INT_MAX 2147483647
+#define rate 5
+
+//Our addition
+int scheduling = 0;
+#ifdef SJF
+scheduling = 1;
+#endif
+#ifdef FCFS
+scheduling = 2;
+#endif
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -243,6 +255,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  p->last_runnable_time = ticks;
 
   release(&p->lock);
 }
@@ -289,6 +302,11 @@ fork(void)
   }
   np->sz = p->sz;
 
+  // Our addition - initiate mean_ticks, last_ticks, last_runnable_time.
+  np->last_ticks = 0;
+  np->mean_ticks = 0;
+  np->last_runnable_time = 0;
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -313,6 +331,7 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+  np->last_runnable_time = ticks;
   release(&np->lock);
 
   return pid;
@@ -437,31 +456,77 @@ wait(uint64 addr)
 void
 scheduler(void)
 {
-  struct proc *p;
-  struct cpu *c = mycpu();
-  
-  c->proc = 0;
-  for(;;){
-    // Avoid deadlock by ensuring that devices can interrupt.
-    intr_on();
+    struct proc *p;
+    struct cpu *c = mycpu();
+    struct proc *min;
+    int pre_ticks;
+    c->proc = 0;
+    for(;;){
+        // Avoid deadlock by ensuring that devices can interrupt.
+        intr_on();
+        switch(scheduling) {
+            // SJF
+            case 1:
+                min = proc;
+                for (p = proc; p < &proc[NPROC]; p++) {
+                    if (p->state == RUNNABLE && p->mean_ticks <= min->mean_ticks) {
+                        if(holding(&min->lock))
+                            release(&min->lock);
+                        acquire(&p->lock);
+                        min = p;
+                    }
+                }
+                if (min->state == RUNNABLE) {
+                    min->state = RUNNING;
+                    c->proc = min;
+                    pre_ticks = ticks;
+                    swtch(&c->context, &min->context);
+                    c->proc = 0;
+                    min->last_ticks = ticks - pre_ticks;
+                    min->mean_ticks = ((10 - rate) * (min->mean_ticks) + rate * (min->last_ticks) ) / 10;
+                }
+                release(&min->lock);
+                break;
+            // FCFS
+            case 2:
+                min = proc;
+                for (p = proc; p < &proc[NPROC]; p++) {
+                    if (p->state == RUNNABLE && p->last_runnable_time <= min->last_runnable_time) {
+                        if(holding(&min->lock))
+                            release(&min->lock);
+                        acquire(&p->lock);
+                        min = p;
+                    }
+                }
+                if (min->state == RUNNABLE) {
+                    min->state = RUNNING;
+                    c->proc = min;
+                    swtch(&c->context, &min->context);
+                    c->proc = 0;
+                }
+                release(&min->lock);
+                break;
+            // Default
+            default:
+                for (p = proc; p < &proc[NPROC]; p++) {
+                    acquire(&p->lock);
+                    if (p->state == RUNNABLE) {
+                        // Switch to chosen process.  It is the process's job
+                        // to release its lock and then reacquire it
+                        // before jumping back to us.
+                        p->state = RUNNING;
+                        c->proc = p;
+                        swtch(&c->context, &p->context);
 
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-      }
-      release(&p->lock);
+                        // Process is done running for now.
+                        // It should have changed its p->state before coming back.
+                        c->proc = 0;
+                    }
+                    release(&p->lock);
+                }
+                break;
+        }
     }
-  }
 }
 
 // Switch to scheduler.  Must hold only p->lock
@@ -498,6 +563,7 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+  p->last_runnable_time = ticks;
   sched();
   release(&p->lock);
 }
@@ -566,6 +632,7 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        p->last_runnable_time = ticks;
       }
       release(&p->lock);
     }
@@ -615,6 +682,7 @@ kill(int pid)
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
+        p->last_runnable_time = ticks;
       }
       release(&p->lock);
       return 0;
