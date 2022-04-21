@@ -92,9 +92,9 @@ struct proc {
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
-  int mean_ticks;
-  int last_ticks;
-  int last_runnable_time;
+  uint64 mean_ticks;
+  uint64 last_ticks;
+  uint64 last_runnable_time;
   uint64 ticks;                // Saves ticks inorder to calculate sleeping time.
 
   // wait_lock must be held when using this:
