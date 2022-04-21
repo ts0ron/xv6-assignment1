@@ -590,6 +590,8 @@ print_pids(void){
 int
 pause_system(int seconds)
 {
+  struct proc *p;
+  
   return 0;
 }
 
@@ -599,7 +601,7 @@ int
 kill_system(void)
 {
   struct proc *p;
-  printf("We have entered the kill_system system call\n");
+
   for(p = proc; p < &proc[NPROC]; p++){
     acquire(&p->lock);
     if(p->pid != 1 &&  p->pid != 2){
@@ -610,7 +612,7 @@ kill_system(void)
       release(&p->lock);
     }
   }
-  printf("all processes have been killed\n");
+
   return -1;
 }
 
