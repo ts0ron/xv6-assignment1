@@ -79,14 +79,20 @@ sys_pause_system(void)
 {
   int seconds;
   
-  if(argint(0, &seconds) < 0)
+  if(argint(1, &seconds) < 0)
     return -1;
   return pause_system(seconds);
 }
 
 uint64
+sys_print_pids(void){
+  return print_pids();
+}
+
+uint64
 sys_kill_system(void)
 {
+  printf("We have reached sys_kill_system in sysproc.c\n");
   return kill_system();
 }
 

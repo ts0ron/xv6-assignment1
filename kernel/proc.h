@@ -95,6 +95,7 @@ struct proc {
   int mean_ticks;
   int last_ticks;
   int last_runnable_time;
+  uint64 ticks;                // Saves ticks inorder to calculate sleeping time.
 
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process

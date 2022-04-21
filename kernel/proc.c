@@ -639,6 +639,20 @@ wakeup(void *chan)
   }
 }
 
+int
+print_pids(void){
+  struct proc *p;
+  printf("Processes PIDs: \n\n");
+  for(p = proc; p < &proc[NPROC]; p++){
+    acquire(&p->lock);
+    if(p->state != UNUSED){
+      printf("Process %s has PID %d\n", p->name, p->pid);
+    }
+    release(&p->lock);
+  }
+  printf("Finished printing all PIDs\n\n");
+  return 0;
+}
 // Pause all user's processes for specified seconds
 int
 pause_system(int seconds)
@@ -652,10 +666,10 @@ int
 kill_system(void)
 {
   struct proc *p;
-
+  printf("We have entered the kill_system system call\n");
   for(p = proc; p < &proc[NPROC]; p++){
     acquire(&p->lock);
-    if(p->pid != 1 || p->pid != 2){
+    if(p->pid != 1 &&  p->pid != 2){
       release(&p->lock);
       kill(p->pid);
     }
@@ -663,6 +677,7 @@ kill_system(void)
       release(&p->lock);
     }
   }
+  printf("all processes have been killed\n");
   return -1;
 }
 
