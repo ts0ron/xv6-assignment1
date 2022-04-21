@@ -12,7 +12,7 @@
 //Our addition
 int scheduling = 0;
 #ifdef SJF
-scheduling = 1;
+scheduling = 1 ;
 #endif
 #ifdef FCFS
 scheduling = 2;
