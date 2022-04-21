@@ -94,6 +94,10 @@ struct proc {
   int pid;                     // Process ID
   uint64 pause_ticks;          // Saves ticks inorder to calculate sleeping time.
   int pause_seconds;           // Saves the number of seconds the process has to pause
+  uint64 mean_ticks;
+  uint64 last_ticks;
+  uint64 last_runnable_time;
+  uint64 ticks;                // Saves ticks inorder to calculate sleeping time.
 
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
