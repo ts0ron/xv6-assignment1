@@ -55,6 +55,10 @@ usertrap(void)
 
     if(p->killed)
       exit(-1);
+    
+    // if pause indicator is on then give up the CPU
+    if(p->pause_ind)
+      yield();
 
     // sepc points to the ecall instruction,
     // but we want to return to the next instruction.
@@ -151,6 +155,10 @@ kerneltrap()
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
+    yield();
+  
+  // give up the CPU if pause indicator is on
+  if(myproc()->pause_ind)
     yield();
 
   // the yield() may have caused some traps to occur,
