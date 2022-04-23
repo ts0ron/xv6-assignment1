@@ -680,9 +680,9 @@ int
 is_paused()
 { 
   uint64 curr_ticks = 0;
-  acquire(tickslock);
+  acquire(&tickslock);
   curr_ticks = ticks;
-  release(tickslock);
+  release(&tickslock);
 
   if( pause_seconds * int(10e6) < curr_ticks - pause_ticks)
     return 1;
@@ -694,9 +694,9 @@ int
 pause_system(int seconds)
 {
   struct proc *p;
-  acquire(tickslock);
+  acquire(&tickslock);
   pause_ticks = ticks;
-  release(tickslock);
+  release(&tickslock);
 
   for(p = proc; p < &proc[NPROC]; p++){
     acquire(&p->lock);
