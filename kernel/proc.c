@@ -472,6 +472,21 @@ wait(uint64 addr)
   }
 }
 
+/*
+is_paused return true if the system is still paused, false otherwise.
+*/
+int
+is_paused()
+{
+  printf("WE ARE INSIDE is_paused BEFORE curr_ticks = ticks\n\n");
+  uint64 curr_ticks = ticks;
+  printf("WE GOT TO is_paused AFTER CURR_TICKS!!!!!!!!!!!!!\n\n");
+  if( pause_seconds * 10 <= curr_ticks - pause_ticks)
+    return 0;
+
+  return 1;
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -490,6 +505,19 @@ scheduler(void)
     for(;;){
         // Avoid deadlock by ensuring that devices can interrupt.
         intr_on();
+        while(pause_ind){
+          printf("WE ARE INSIDE THE SCHEDULER WHILE LOOP\n\n");
+          if(!is_paused()){
+            // If the system is not paused, we don't want to run any processes.
+            // We just want to keep the scheduler running.
+            printf("WE ARE INSIDE THE SCHEDULER IF INSIDE WHILE LOOP\n\n");
+            pause_ind = 0;
+            pause_seconds = 0;
+            break;
+          }
+          printf("WE HAVE PASSED THE IF INSIDE THE WHILE LOOP INSIDE THE SCHEDULER\n\n");
+        }
+
         switch(scheduling) {
             // SJF
             case 1:
@@ -687,6 +715,11 @@ print_pids(void){
 int
 pause_system(int seconds)
 {
+  pause_ind = 1;
+  pause_ticks = ticks;
+  pause_seconds = seconds;
+  printf("WE ARE INSIDE pause_system in proc.c AFTER SETTING ALL VARIABLES\n\n");
+  yield();
   return 0;
 }
 
@@ -696,18 +729,21 @@ int
 kill_system(void)
 {
   struct proc *p;
-  printf("We have entered the kill_system system call\n");
+  int pid = 0;
   for(p = proc; p < &proc[NPROC]; p++){
     acquire(&p->lock);
     if(p->pid != 1 &&  p->pid != 2){
+      pid = p->pid;
       release(&p->lock);
-      kill(p->pid);
+      kill(pid);
     }
     else{
       release(&p->lock);
     }
   }
-  printf("all processes have been killed\n");
+  if(p == &proc[NPROC]) // if finished iteration over all processes then return 0 for success.
+    return 0;
+  // if p != &proc[NPROC] then the iteration for some reason stop before it should have.
   return -1;
 }
 
