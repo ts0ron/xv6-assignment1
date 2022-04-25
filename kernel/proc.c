@@ -494,7 +494,7 @@ scheduler(void)
             printf("WE ARE INSIDE THE SCHEDULER IF INSIDE WHILE LOOP\n\n");
             pause_ind = 0;
             pause_seconds = 0;
-            break;
+            
           }
           printf("WE HAVE PASSED THE IF INSIDE THE WHILE LOOP INSIDE THE SCHEDULER\n\n");
         }
