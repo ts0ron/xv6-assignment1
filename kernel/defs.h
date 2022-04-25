@@ -144,6 +144,9 @@ void            syscall();
 
 // trap.c
 extern uint     ticks;
+extern int      pause_ind;
+extern uint64   pause_ticks;
+extern int      pause_seconds;
 void            trapinit(void);
 void            trapinithart(void);
 extern struct spinlock tickslock;

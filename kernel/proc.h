@@ -18,6 +18,7 @@ struct context {
   uint64 s11;
 };
 
+
 // Per-CPU state.
 struct cpu {
   struct proc *proc;          // The process running on this cpu, or null.
@@ -94,11 +95,11 @@ struct proc {
   int pid;                     // Process ID
 
   // Our addition
-  int pause_ind;
   uint64 mean_ticks;
   uint64 last_ticks;
   uint64 last_runnable_time;
   uint64 ticks;                // Saves ticks inorder to calculate sleeping time.
+  // End of our addition
 
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process

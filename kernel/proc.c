@@ -9,13 +9,6 @@
 #define INT_MAX 2147483647
 #define rate 5
 
-//Our addition
-uint64 pause_ticks = 0;
-int pause_seconds = 0; 
-/*
-Condition checking if the pause time is up or not.
-pause_seconds * int(10e6)  < ticks - pause_ticks
-*/
 
 int scheduling = 0;
 #ifdef SJF
@@ -259,11 +252,17 @@ userinit(void)
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
 
+  p->last_runnable_time = ticks;
+
+  p->last_ticks = 0;
+  p->mean_ticks = 0;
+
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
-  p->last_runnable_time = ticks;
+  // p->last_runnable_time = ticks;
+
 
   release(&p->lock);
 }
@@ -310,11 +309,10 @@ fork(void)
   }
   np->sz = p->sz;
 
-  // Our addition - initiate mean_ticks, last_ticks, last_runnable_time, and pause_ind.
+  // Our addition - initiate mean_ticks, last_ticks, last_runnable_time.
   np->last_ticks = 0;
   np->mean_ticks = 0;
   np->last_runnable_time = 0;
-  np->pause_ind = 0;
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -455,6 +453,21 @@ wait(uint64 addr)
   }
 }
 
+/*
+is_paused return true if the system is still paused, false otherwise.
+*/
+int
+is_paused()
+{ 
+  printf("WE ARE INSIDE is_paused BEFORE curr_ticks = ticks\n\n");
+  uint64 curr_ticks = ticks;
+  printf("WE GOT TO is_paused AFTER CURR_TICKS!!!!!!!!!!!!!\n\n");
+  if( pause_seconds * 10 <= curr_ticks - pause_ticks)
+    return 0;
+
+  return 1;
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -473,6 +486,19 @@ scheduler(void)
     for(;;){
         // Avoid deadlock by ensuring that devices can interrupt.
         intr_on();
+        while(pause_ind){
+          printf("WE ARE INSIDE THE SCHEDULER WHILE LOOP\n\n");
+          if(!is_paused()){
+            // If the system is not paused, we don't want to run any processes.
+            // We just want to keep the scheduler running.
+            printf("WE ARE INSIDE THE SCHEDULER IF INSIDE WHILE LOOP\n\n");
+            pause_ind = 0;
+            pause_seconds = 0;
+            break;
+          }
+          printf("WE HAVE PASSED THE IF INSIDE THE WHILE LOOP INSIDE THE SCHEDULER\n\n");
+        }
+
         switch(scheduling) {
             // SJF
             case 1:
@@ -484,11 +510,8 @@ scheduler(void)
                         acquire(&p->lock);
                         min = p;
                     }
-                }
-                // added !is_paused which validates that the system should not be in paused status 
-                if(!is_paused()){
+                } 
                   if (min->state == RUNNABLE) {
-                      min->pause_ind = 0;
                       min->state = RUNNING;
                       c->proc = min;
                       pre_ticks = ticks;
@@ -497,7 +520,6 @@ scheduler(void)
                       min->last_ticks = ticks - pre_ticks;
                       min->mean_ticks = ((10 - rate) * (min->mean_ticks) + rate * (min->last_ticks) ) / 10;
                   }
-                }
                 release(&min->lock);
                 break;
             // FCFS
@@ -511,27 +533,22 @@ scheduler(void)
                         min = p;
                     }
                 }
-                if(!is_paused()){
                   if (min->state == RUNNABLE) {
-                      min->pause_ind = 0;
                       min->state = RUNNING;
                       c->proc = min;
                       swtch(&c->context, &min->context);
                       c->proc = 0;
                   }
-                }
                 release(&min->lock);
                 break;
             // Default
             default:
                 for (p = proc; p < &proc[NPROC]; p++) {
                     acquire(&p->lock);
-                    if(!is_paused()){
                       if (p->state == RUNNABLE) {
                           // Switch to chosen process.  It is the process's job
                           // to release its lock and then reacquire it
                           // before jumping back to us.
-                          p->pause_ind = 0;
                           p->state = RUNNING;
                           c->proc = p;
                           swtch(&c->context, &p->context);
@@ -540,7 +557,6 @@ scheduler(void)
                           // It should have changed its p->state before coming back.
                           c->proc = 0;
                       }
-                    }
                     release(&p->lock);
                 }
                 break;
@@ -673,45 +689,16 @@ print_pids(void){
   return 0;
 }
 
-/*
-is_paused return true if the system is still paused, false otherwise.
-*/
-int
-is_paused()
-{ 
-  uint64 curr_ticks = 0;
-  acquire(&tickslock);
-  curr_ticks = ticks;
-  release(&tickslock);
-
-  if( pause_seconds * int(10e6) < curr_ticks - pause_ticks)
-    return 1;
-
-  return 0;
-}
 // Pause all user's processes for specified seconds
 int
 pause_system(int seconds)
 {
-  struct proc *p;
-  acquire(&tickslock);
+  pause_ind = 1;
   pause_ticks = ticks;
-  release(&tickslock);
-
-  for(p = proc; p < &proc[NPROC]; p++){
-    acquire(&p->lock);
-    if(p->pid != 1 &&  p->pid != 2){
-      p->pause_ind = 1;
-      release(&p->lock);
-    }
-    else{
-      release(&p->lock);
-    }
-  }
-  if(p = &proc[NPROC]) // if finished iteration over all processes then return 0 for success.
-    return 0;
-  // if p != &proc[NPROC] then the iteration for some reason stop before it should have.
-  return -1;
+  pause_seconds = seconds;
+  printf("WE ARE INSIDE pause_system in proc.c AFTER SETTING ALL VARIABLES\n\n");
+  yield();
+  return 0;
 }
 
 // Killing the entire system's user processes
@@ -732,7 +719,7 @@ kill_system(void)
       release(&p->lock);
     }
   }
-  if(p = &proc[NPROC]) // if finished iteration over all processes then return 0 for success.
+  if(p == &proc[NPROC]) // if finished iteration over all processes then return 0 for success.
     return 0;
   // if p != &proc[NPROC] then the iteration for some reason stop before it should have.
   return -1;

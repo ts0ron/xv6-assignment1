@@ -8,6 +8,9 @@
 
 struct spinlock tickslock;
 uint ticks;
+int pause_ind = 0;
+uint64 pause_ticks = 0;
+int pause_seconds = 0;
 
 extern char trampoline[], uservec[], userret[];
 
@@ -55,10 +58,6 @@ usertrap(void)
 
     if(p->killed)
       exit(-1);
-    
-    // if pause indicator is on then give up the CPU
-    if(p->pause_ind)
-      yield();
 
     // sepc points to the ecall instruction,
     // but we want to return to the next instruction.
@@ -83,6 +82,11 @@ usertrap(void)
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
     yield();
+
+  // Our addition
+  if(pause_ind)
+    yield();
+    
 
   usertrapret();
 }
@@ -148,6 +152,7 @@ kerneltrap()
     panic("kerneltrap: interrupts enabled");
 
   if((which_dev = devintr()) == 0){
+    printf("The devintr result is : %d", which_dev);
     printf("scause %p\n", scause);
     printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
     panic("kerneltrap");
@@ -156,10 +161,10 @@ kerneltrap()
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
     yield();
-  
-  // give up the CPU if pause indicator is on
-  if(myproc()->pause_ind)
+
+  if(pause_ind)
     yield();
+
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.
