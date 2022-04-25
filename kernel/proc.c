@@ -27,8 +27,11 @@
 
 uint64 sleeping_processes_mean = 0;
 uint64 running_processes_mean = 0;
-uint64 running_time_mean = 0;
+uint64 runnable_processes_mean = 0;
 uint64 num_of_processes = 0;
+uint64 program_time = 0;
+uint64 start_time = 0;
+uint64 cpu_utilization = 0;
 
 //Our addition
 int scheduling = 0;
@@ -80,7 +83,8 @@ void
 procinit(void)
 {
   struct proc *p;
-  
+
+  start_time = ticks;
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
   for(p = proc; p < &proc[NPROC]; p++) {
@@ -413,10 +417,21 @@ exit(int status)
   p->xstate = status;
   p->state = ZOMBIE;
 
-  release(&wait_lock);
-
+  if(num_of_processes == 0) {
+      sleeping_processes_mean = p->sleeping_time;
+      running_processes_mean = p->running_time;
+      runnable_processes_mean = p->runnable_time;
+  }
+  else {
+      sleeping_processes_mean = ((sleeping_processes_mean * num_of_processes) + p->sleeping_time) / (num_of_processes+1);
+      running_processes_mean = ((running_processes_mean * num_of_processes) + p->running_time) / (num_of_processes+1);
+      runnable_processes_mean = ((runnable_processes_mean * num_of_processes) + p->runnable_time) / (num_of_processes+1);
+  }
   num_of_processes++;
-  sleeping_processes_mean = (sleeping_processes_mean + (p->sleeping_time))/num_of_processes;
+  program_time += p->running_time;
+  cpu_utilization = program_time / (ticks - start_time);
+
+  release(&wait_lock);
 
   // Jump into the scheduler, never to return.
   sched();
