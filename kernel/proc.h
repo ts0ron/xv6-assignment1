@@ -92,10 +92,15 @@ struct proc {
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
-  uint64 mean_ticks;
-  uint64 last_ticks;
-  uint64 last_runnable_time;
-  uint64 ticks;                // Saves ticks inorder to calculate sleeping time.
+  uint64 mean_ticks;            // Mean # of ticks this process uses.
+  uint64 last_ticks;            // Last # of ticks this process used.
+  uint64 last_sleeping_time;    // Tick count of last time the process changed to SLEEPING.
+  uint64 last_runnable_time;    // Tick count of last time the process changed to RUNNABLE.
+  uint64 last_running_time;     // Tick count of last time the process changed to RUNNING.
+  uint64 sleeping_time;         // Total ticks spent SLEEPING.
+  uint64 runnable_time;         // Total ticks spent RUNNABLE.
+  uint64 running_time;          // Total ticks spent RUNNING.
+  uint64 ticks;                 // Saves ticks inorder to calculate sleeping time.
 
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process

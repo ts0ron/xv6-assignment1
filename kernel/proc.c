@@ -8,6 +8,27 @@
 
 #define INT_MAX 2147483647
 #define rate 5
+#define RUNNABLE2RUNNING(p) ({ \
+        p->last_running_time = ticks; \
+        p->runnable_time += ticks - (p->last_runnable_time); \
+})
+#define RUNNING2SLEEPING(p) ({ \
+        p->last_sleeping_time = ticks; \
+        p->running_time += ticks - (p->last_running_time); \
+})
+#define RUNNING2RUNNABLE(p) ({ \
+        p->last_runnable_time = ticks; \
+        p->running_time += ticks - (p->last_running_time); \
+})
+#define SLEEPING2RUNNABLE(p) ({ \
+        p->last_runnable_time = ticks; \
+        p->sleeping_time += ticks - (p->last_sleeping_time); \
+})
+
+uint64 sleeping_processes_mean = 0;
+uint64 running_processes_mean = 0;
+uint64 running_time_mean = 0;
+uint64 num_of_processes = 0;
 
 //Our addition
 int scheduling = 0;
@@ -255,7 +276,6 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
-  p->last_runnable_time = ticks;
 
   release(&p->lock);
 }
@@ -306,6 +326,9 @@ fork(void)
   np->last_ticks = 0;
   np->mean_ticks = 0;
   np->last_runnable_time = 0;
+  np->sleeping_time = 0;
+  np->runnable_time = 0;
+  np->running_time = 0;
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -391,6 +414,9 @@ exit(int status)
   p->state = ZOMBIE;
 
   release(&wait_lock);
+
+  num_of_processes++;
+  sleeping_processes_mean = (sleeping_processes_mean + (p->sleeping_time))/num_of_processes;
 
   // Jump into the scheduler, never to return.
   sched();
@@ -478,6 +504,7 @@ scheduler(void)
                 }
                 if (min->state == RUNNABLE) {
                     min->state = RUNNING;
+                    RUNNABLE2RUNNING(min);
                     c->proc = min;
                     pre_ticks = ticks;
                     swtch(&c->context, &min->context);
@@ -500,6 +527,7 @@ scheduler(void)
                 }
                 if (min->state == RUNNABLE) {
                     min->state = RUNNING;
+                    RUNNABLE2RUNNING(min);
                     c->proc = min;
                     swtch(&c->context, &min->context);
                     c->proc = 0;
@@ -515,6 +543,7 @@ scheduler(void)
                         // to release its lock and then reacquire it
                         // before jumping back to us.
                         p->state = RUNNING;
+                        RUNNABLE2RUNNING(p);
                         c->proc = p;
                         swtch(&c->context, &p->context);
 
@@ -563,7 +592,7 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
-  p->last_runnable_time = ticks;
+  RUNNING2RUNNABLE(p);
   sched();
   release(&p->lock);
 }
@@ -609,6 +638,7 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+  RUNNING2SLEEPING(p);
 
   sched();
 
@@ -632,7 +662,7 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
-        p->last_runnable_time = ticks;
+        SLEEPING2RUNNABLE(p);
       }
       release(&p->lock);
     }
@@ -697,7 +727,8 @@ kill(int pid)
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
-        p->last_runnable_time = ticks;
+        SLEEPING2RUNNABLE(p);
+
       }
       release(&p->lock);
       return 0;
